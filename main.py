@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 import sys
 from call_function import available_functions, call_function
 
+
+MAX_ITERATIONS = 20
+
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 
@@ -34,27 +37,38 @@ if len(sys.argv) > 2 and sys.argv[2] == "--verbose":
 
 client = genai.Client(api_key=api_key)
 
-resp = client.models.generate_content(
-    model="gemini-2.0-flash-001",
-    contents=prompt,
-    config=types.GenerateContentConfig(
-        tools=[available_functions], system_instruction=system_prompt
-    ),
-)
-
-meta = resp.usage_metadata
-print(resp.text)
-if resp.function_calls:
-    for function_call_part in resp.function_calls:
-        function_output = call_function(function_call_part, True)
-        if function_output.parts[0].function_response.response:
-            if verbose:
-                print(f"-> {function_output.parts[0].function_response.response}")
-                print()
-        else:
-            raise Exception("Fatal error: invalid tool response")
+iterations = 0
+messages = [prompt]
+while iterations < MAX_ITERATIONS:
+    resp = client.models.generate_content(
+        model="gemini-2.0-flash-001",
+        contents=messages,
+        config=types.GenerateContentConfig(
+            tools=[available_functions], system_instruction=system_prompt
+        ),
+    )
+    meta = resp.usage_metadata
+    for c in resp.candidates:
+        messages.append(c.content)
+    if resp.function_calls:
+        for function_call_part in resp.function_calls:
+            print(
+                f"Calling function: {function_call_part.name}({function_call_part.args})"
+            )
+            function_output = call_function(function_call_part, True)
+            if function_output.parts[0].function_response.response:
+                messages.append(function_output)
+                if verbose:
+                    print(f"-> {function_output.parts[0].function_response.response}")
+                    print()
+            else:
+                raise Exception("Fatal error: invalid tool response")
+    else:
+        break
+    iterations += 1
 
 if verbose:
     print(f"User prompt: {prompt}")
     print(f"Prompt tokens: {meta.prompt_token_count}")
     print(f"Response tokens: {meta.candidates_token_count}")
+print(resp.text)

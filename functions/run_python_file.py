@@ -26,13 +26,14 @@ def run_python_file(working_directory, file_path, args=None):
             cwd=os.path.abspath(working_directory),
         )
 
-        if resp.stdout or resp.stderr:
-            print(f"STDOUT: {resp.stdout}")
-            print(f"STDERR: {resp.stderr}")
-        else:
-            print("No output produced.")
+        output = []
+        if resp.stdout:
+            output.append(f"STDOUT: {resp.stdout}")
+        if resp.stderr:
+            output.append(f"STDERR: {resp.stderr}")
         if resp.returncode:
-            print(f"Process exited with code {resp.returncode}")
+            output.append(f"Process exited with code {resp.returncode}")
+        return "\n".join(output) if output else "No output produced."
     except Exception as e:
         print(f"Error: executing Python file: {e}")
 
@@ -48,7 +49,11 @@ schema_run_python_file = types.FunctionDeclaration(
                 description="The Python script to run, relative to the working directory.",
             ),
             "args": types.Schema(
-                type=types.Type.STRING,
+                type=types.Type.ARRAY,
+                items=types.Schema(
+                    type=types.Type.STRING,
+                    description="The arguments to pass to the script, if any.",
+                ),
                 description="The arguments to pass to the script, if any.",
             ),
         },
